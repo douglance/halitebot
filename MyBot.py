@@ -152,7 +152,7 @@ while True:
                 ship.position, cell.position))
             if distance is 0:
                 distance = 0.1
-            fitness = (cell.value*10) / distance
+            fitness = (cell.value^2) / distance
             if fitness > best_fitness:
                 best_fitness = fitness
                 best_cell = cell
