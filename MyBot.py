@@ -43,10 +43,13 @@ class Navy():
     def closest_to_drop_target(self):
         objs = []
         for captain in self.captains:
-            objs.append((captain, game_map.calculate_distance(captain.ship.position, map.best_location.position)))
+            tpl = (captain, game_map.calculate_distance(captain.ship.position, map.best_location.position))
+            logger.warning(tpl)
+            objs.append(tpl)
         try:
             closest = min(objs, key=lambda x: x[1])[0]
-            return min(objs, key=lambda x: x[1])[0]
+            # logger.warning(f'Closest Drop: {closest}')
+            return closest
         except Exception as err:
             logger.warning('Error in closest to drop target')
             logger.warning(err)
@@ -87,7 +90,10 @@ class Location():
         for neighbor in neighbors:
             if not game_map[neighbor].is_occupied:
                 nearby_cells.append(game_map[neighbor])
-        return random.choice(nearby_cells).position
+        if not nearby_cells:
+            return self.position
+        else:
+            return random.choice(nearby_cells).position
 
     def good_for_looting(self, ship):
         expected_harvest = (.25*self.cell.halite_amount)
@@ -265,8 +271,10 @@ class Captain():
                     return self.go_random()
                 map.safe_locations.remove(self.best_target_location)
                 return self.ship.move(move)
-            else:
+            elif self.can_afford_to_move:
                 return self.go_random()
+            else:
+                return self.stay_still()
         except Exception as err:
             logger.warning('error hunting')
             logger.warning(err)
@@ -278,7 +286,7 @@ class Captain():
             target = self.closest_drop.position
             move = game_map.naive_navigate(self.ship, target)
             closest_drop_distance = game_map.calculate_distance(self.ship.position, self.closest_drop.position)
-            if move is Direction.Still and closest_drop_distance <5:
+            if move is Direction.Still and closest_drop_distance <3:
                 return self.go_random()
             return self.ship.move(move)
         except Exception as err:
@@ -299,13 +307,13 @@ class Captain():
                 return self.ship.move(direction)
             else:
                 return self.ship.move(game_map.naive_navigate(
-                    ship, target))
+                    self.ship.position, target))
 
         except Exception as err:
             logger.warning('error in bank unsafe')
             logger.warning(err)
             return self.ship.move(game_map.naive_navigate(
-                ship, get_closest_drop().position))
+                self.ship, self.closest_drop.position))
 
     def build(self):
         # TODO: Test this feature
@@ -366,13 +374,13 @@ while True:
     dropoffs.append(me.shipyard)
     ships = me.get_ships()
    
-    logger.info('Total Ships: ' + str(len(ships)))
+    logger.info(f'Total Ships: {len(ships)}')
     bank = me.halite_amount
-    logger.info('Bank: ' + str(bank))
+    logger.info(f'Bank: {bank}')
     # player_can_afford_dropoff = bank > constants.DROPOFF_COST
 
     # Update Navy
-    for index, ship in enumerate(ships):
+    for ship in ships:
         try:
             location = Location(position=ship.position,
                                 cell=game_map[ship.position])
@@ -381,35 +389,37 @@ while True:
                                   ship_id=ship.id)
             if new_captain not in navy.captains:
                 navy.captains.append(new_captain)
-                logger.info('Added new captain to the navy')
         except Exception as err:
             logger.warning('Error updating navy')
             logger.warning(err)
-    
+
+    new_navy=[]
+    for captain in navy.captains:
+        if me.has_ship(captain.ship_id):
+            try:
+                new_navy.append(captain)
+            except Exception as err:
+                logger.warning('Not in list')
+                logger.warning(err)
+    navy.captains = new_navy
+
     ###############
     ## Main Loop ##
     ############### 
     logger.info('Start Main Loop')
     try:
         map.reset()
-
         try:
+            # logger.warning('Attempting sort')
             navy.captains.sort(key=lambda x: x.priority)
         except Exception as err:
             logger.warning('error in sort')
             logger.warning(err)
 
         for captain in navy.captains:
-            logging.info(captain.priority)
+            # logger.info(f'Priority: {captain.priority}')
             try:
-                if me.has_ship(captain.ship_id):
-                    command_queue.append(captain.orders)
-                else:
-                    try:
-                        navy.captains.remove(captain)
-                    except Exception as err:
-                        logger.warning('Not in list')
-                        logger.warning(err)
+                command_queue.append(captain.orders)
             except Exception as err:
                 logger.warning('Error in Captain Loop')
                 logger.warning(err)
