@@ -6,7 +6,7 @@
     {
       "label": "run game",
       "type": "shell",
-      "command": "run_game.sh",
+      "command": "./run_game.sh",
       "group": {
         "kind": "build",
         "isDefault": true
