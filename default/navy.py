@@ -148,7 +148,7 @@ class Captain():
     @property
     def should_build(self):
         '''Returns True if ship should go find the best drop location and build a dropoff there'''
-        return self.navy.admiral.player.halite_amount > 5000 and self is self.navy.closest_to_drop_target and \
+        return self.navy.admiral.player.halite_amount > 5000 and self is self.navy.closest_to_best_drop_target and \
             round(len(self.navy.captains)/len(self.navy.dropoffs)) > 10
 
     @property
