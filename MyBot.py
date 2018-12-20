@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 # Python 3.6
 
-import hlt
-from hlt import constants
-from default.navy import Navy, Admiral, Captain
-from default.map import Map
-from default.constants import LOG_LEVEL
 import random
 import logging
 import math
 import time
 import logging
+import hlt
+from hlt import constants
+from default.navy import Navy, Admiral, Captain
+from default.map import Map
+from default.constants import LOG_LEVEL
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(LOG_LEVEL)

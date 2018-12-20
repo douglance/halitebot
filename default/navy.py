@@ -205,18 +205,17 @@ class Captain():
         '''Tells the captain which orders to give'''
         if self.game_ending:
             return 'FINAL'
-        elif self.should_build:
+        if self.should_build:
             return 'BUILD'
-        elif self.should_bank:
+        if self.should_bank:
             return 'BANK'
-        elif self.should_loot:
+        if self.should_loot:
             return 'LOOT'
-        elif self.should_hunt:
+        if self.should_hunt:
             return 'HUNT'
-        elif self.can_afford_to_move:
+        if self.can_afford_to_move:
             return 'RAND'
-        else:
-            return 'MISC'
+        return 'MISC'
 
     @property
     def orders(self):
@@ -225,20 +224,19 @@ class Captain():
         self.last_location = self.current_location
         self.current_location = self.navy.admiral.map.get_location_from_position(
             position)
-        if self.status is 'FINAL':
+        if self.status == 'FINAL':
             return self.bank_unsafe()
-        elif self.status is 'BANK':
+        if self.status == 'BANK':
             return self.bank()
-        elif self.status is 'BUILD':
+        if self.status == 'BUILD':
             return self.build()
-        elif self.status is 'HUNT':
+        if self.status == 'HUNT':
             return self.hunt()
-        elif self.status is 'LOOT':
+        if self.status == 'LOOT':
             return self.loot()
-        elif self.status is 'RAND':
+        if self.status == 'RAND':
             return self.go_random_safe()
-        else:
-            return self.stay_still()
+        return self.stay_still()
 
     @property
     def closest_drop(self):
@@ -278,19 +276,17 @@ class Captain():
                self.distance_to_closest_drop <= 1 and \
                move is Direction.Still:
                 return self.go_random_safe()
-            elif target_position == self.last_location.position:
+            if target_position == self.last_location.position:
                 return self.ship.stay_still()
-            elif self.can_afford_to_move:
+            if self.can_afford_to_move:
                 if move is Direction.Still and self.current_location.cell.halite_amount < 100:
                     return self.go_random_for_equal_distance(target_location=best_location)
                 self.navy.admiral.map.safe_locations.remove(best_location)
                 return self.ship.move(move)
-
-            else:
-                return self.stay_still()
+            return self.stay_still()
         except Exception:
             logger.exception('error hunting')
-            return self.go_random_for_equal_distance(target_location=self.best_target_location)
+            return self.stay_still()
 
     def bank(self):
         '''Tells the ship where to go when going to bank halite at a drop off
@@ -307,9 +303,7 @@ class Captain():
             return self.ship.move(move)
         except Exception:
             logger.exception("error banking")
-            target = self.closest_drop.position
-            move = self.game_map.naive_navigate(self.ship, target)
-            return self.ship.move(move)
+            return self.stay_still()
 
     def bank_unsafe(self):
         '''Tells the ship where to go when going to bank halite at a drop off.
@@ -336,8 +330,7 @@ class Captain():
 
         except Exception:
             logger.exception('error in bank unsafe')
-            return self.ship.move(self.game_map.naive_navigate(
-                self.ship, self.closest_drop.position))
+            return self.stay_still()
 
     def build(self):
         '''Tells the ship to navigate to the best location for a dropoff
@@ -351,16 +344,14 @@ class Captain():
             target = self.navy.admiral.map.best_location.position
             move = self.game_map.naive_navigate(self.ship, target)
             if self.current_location.position == self.navy.admiral.map.best_location.position:
-                logger.debug(f'{self.ship_id} built.')
+                logger.debug(f'{self.ship_id} built a dropoff.')
                 return self.ship.make_dropoff()
-            else:
-                if self.can_afford_to_move:
-                    return self.ship.move(move)
-                else:
-                    return self.ship.stay_still()
+            if self.can_afford_to_move:
+                return self.ship.move(move)
+            return self.ship.stay_still()
         except Exception:
             logger.exception('error building')
-            return self.ship.stay_still()
+            return self.stay_still()
 
     def loot(self):
         '''Tells the ship to stay and loot the cell
@@ -369,7 +360,7 @@ class Captain():
             ship.move -- Returns a ship command as expected by the command queue
         '''
         logger.debug(f'{self.ship_id} looting')
-        return self.ship.stay_still()
+        return self.stay_still()
 
     def go_random_safe(self):
         '''Tells the ship to go randomly and trys again once if it can't find a spot to move
@@ -385,11 +376,10 @@ class Captain():
                     self.go_random_unsafe()
                 return self.ship.move(
                     self.game_map.naive_navigate(self.ship, target))
-            else:
-                return self.stay_still()
+            return self.stay_still()
         except Exception:
             logger.exception('error in go_random_safe')
-            return self.ship.stay_still()
+            return self.stay_still()
 
     def go_random_unsafe(self):
         '''Tells the ship to go randomly or else it stays still
@@ -403,11 +393,10 @@ class Captain():
                 target = self.current_location.get_random_neighbor_position_without_structure()
                 return self.ship.move(
                     self.game_map.naive_navigate(self.ship, target))
-            else:
-                return self.stay_still()
+            return self.stay_still()
         except Exception:
             logger.exception('error in go_random_unsafe')
-            return self.ship.stay_still()
+            return self.stay_still()
 
     def go_random_for_equal_distance(self, target_location):
         '''Tells the ship to go randomly for an equal amount of distance that it would 
@@ -445,11 +434,10 @@ class Captain():
                 target = random.choice(choices).position
                 return self.ship.move(
                     self.game_map.naive_navigate(self.ship, target))
-            else:
-                return self.stay_still()
+            return self.stay_still()
         except Exception:
             logger.exception('error in go_random')
-            return self.ship.stay_still()
+            return self.stay_still()
 
     def stay_still(self):
         '''Tells the ship to stay still
