@@ -15,6 +15,7 @@ from .constants import LOG_LEVEL
 logger = logging.getLogger(__name__)
 logger.setLevel(LOG_LEVEL)
 
+
 class Location():
     position: Position
     cell: MapCell
@@ -58,7 +59,7 @@ class Location():
     @property
     def distance_to_closest_drop(self):
         return self.map.game_map.calculate_distance(self.position, self.closest_drop.position)
-    
+
     @property
     def closest_drop(self):
         try:
@@ -73,7 +74,7 @@ class Location():
             logger.exception('error in closest_drop')
 
     def get_random_neighbor_position_without_structure(self):
-        neighbors = self.position.get_surrounding_cardinals()        
+        neighbors = self.position.get_surrounding_cardinals()
         nearby_cells = []
         for neighbor in neighbors:
             if not self.map.game_map[neighbor].is_occupied and \
@@ -88,22 +89,24 @@ class Location():
         expected_harvest = (.25*self.cell.halite_amount)
         available_inventory = (constants.MAX_HALITE-ship.halite_amount)
         if expected_harvest >= constants.MAX_HALITE*.1 and expected_harvest < available_inventory and not self.cell.has_structure:
-        # if expected_harvest < available_inventory 
+            # if expected_harvest < available_inventory
             return True
         else:
             return False
 
     def get_fitness(self, ship):
-        distance = self.map.game_map.calculate_distance(self.position, ship.position)
+        distance = self.map.game_map.calculate_distance(
+            self.position, ship.position)
         distance *= 2
         if distance is 0:
             distance = 1
         return round(self.value / distance)
 
+
 class Map():
     locations: list
     safe_locations: list
-        
+
     def __init__(self, game, locations=list, safe_locations=list):
         self.locations = []
         self.safe_locations = []
@@ -112,17 +115,18 @@ class Map():
         for x in range(self.game_map.width):
             for y in range(self.game_map.height):
                 position = Position(x, y)
-                cell=self.game_map[position]
+                cell = self.game_map[position]
                 location = Location(position=position, cell=cell, map=self)
                 self.locations.append(location)
 
     def get_location_from_position(self, position):
         return [location for location in self.locations if location.position.x == position.x and location.position.y == position.y][0]
-    
+
     def reset(self):
         logger.debug('Resetting Map')
-        self.safe_locations = [location for location in self.locations if not location.cell.has_structure]
-        
+        self.safe_locations = [
+            location for location in self.locations if not location.cell.has_structure]
+
     @property
     def best_location(self):
         return max(self.safe_locations, key=lambda x: x.value)

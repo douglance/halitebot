@@ -3,7 +3,7 @@
 
 import hlt
 from hlt import constants
-from default.navy import Navy, Admiral
+from default.navy import Navy, Admiral, Captain
 from default.map import Map
 from default.constants import LOG_LEVEL
 import random
@@ -15,30 +15,46 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(LOG_LEVEL)
 
-
-def log(name, var):
-    logger.info(f'{name}: {var}')
-# CONSTANTS
-
-
 game = hlt.Game()
-
-
 game.ready("MiPyBot")
 logger.info("Successfully created bot! My Player ID is {}.".format(game.my_id))
 
-map = Map(game=game)
-admiral = Admiral(player=game.me, map=map, game=game)
-navy = Navy(admiral=admiral)
+# Customize these classes and replace the appropriate properties and methods to build your own bot
+
+
+class MyMap(Map):
+    pass
+
+
+class MyNavy(Navy):
+    pass
+
+
+class MyAdmiral(Admiral):
+    pass
+
+
+class MyCaptain(Captain):
+    pass
+
+
+map = MyMap(game=game)
+admiral = MyAdmiral(player=game.me, map=map, game=game)
+navy = MyNavy(admiral=admiral, captain_class=MyCaptain)
 
 ###############
 ## MAIN LOOP ##
 ###############
 
+# This is the main game loop where the magic happens
+# It expects a command_queue that is a list of Halite commands
 
 while True:
     try:
+        # Updates Halite game state
         game.update_frame()
+
+        # Updates our game state
         map.reset()
         navy.update_captains()
 
@@ -61,5 +77,6 @@ while True:
             logger.exception('Error building ship')
 
         game.end_turn(command_queue)
+
     except Exception:
         logger.exception("Error in Main Loop")

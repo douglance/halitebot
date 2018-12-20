@@ -8,7 +8,7 @@ from hlt.positionals import Direction, Position
 from hlt.game_map import MapCell
 import random
 import math
-from .map import Location, Map
+from .map import Location
 from .constants import LOG_LEVEL, DROP_BARRIER
 
 import logging
@@ -18,6 +18,9 @@ logger.setLevel(LOG_LEVEL)
 
 
 class Admiral():
+    '''Represents the player in the bot
+
+    Holds the map and knows when to build new ships'''
 
     def __init__(self, player, map, game):
         self.player = player
@@ -35,37 +38,45 @@ class Admiral():
 
 
 class Navy():
+    '''Manages ship captains
+
+    '''
     captains: dict
 
-    def __init__(self, admiral):
+    def __init__(self, admiral, captain_class):
         self.captains = {}
+        self.captain_class = captain_class
         self.admiral = admiral
 
     @property
     def game_map(self):
+        '''Convenience property for accessing the game map'''
         return self.admiral.map.game_map
 
     @property
     def dropoffs(self):
+        '''List of all dropoffs owned by player'''
         player = self.admiral.player
         dropoffs = player.get_dropoffs()
         dropoffs.append(player.shipyard)
         return dropoffs
 
     def update_captains(self):
+        '''Adds new captains to the Navy'''
         for ship in self.admiral.get_ships():
             location = Location(position=ship.position,
                                 cell=self.game_map[ship.position],
                                 map=self.admiral.map)
-            captain = Captain(last_location=location,
-                              current_location=location,
-                              ship_id=ship.id,
-                              navy=self)
+            captain = self.captain_class(last_location=location,
+                                         current_location=location,
+                                         ship_id=ship.id,
+                                         navy=self)
             if not ship.id in self.captains:
                 self.captains[ship.id] = captain
 
     @property
-    def closest_to_drop_target(self):
+    def closest_to_best_drop_target(self):
+        '''Returns Captain that is closest to the best drop target'''
         try:
             objs = []
             self.update_captains()
@@ -108,12 +119,12 @@ class Captain():
 
     @property
     def game_map(self):
-        '''Passes in the game map for ease of use'''
+        '''Convenience property for accessing the game map'''
         return self.navy.admiral.map.game_map
 
     @property
     def priority(self):
-        '''Used in pathfinding'''
+        '''Used in pathfinding (not actually in the bot yet)'''
         if self.status is 'FINAL':
             return 1
         elif self.status is 'BUILD':
@@ -131,19 +142,23 @@ class Captain():
 
     @property
     def game_ending(self):
+        '''Returns True if the game is ending, so the ship should go crash into the nearest dropoff'''
         return self.navy.admiral.game.turn_number >= constants.MAX_TURNS/1.05
 
     @property
     def should_build(self):
+        '''Returns True if ship should go find the best drop location and build a dropoff there'''
         return self.navy.admiral.player.halite_amount > 5000 and self is self.navy.closest_to_drop_target and \
             round(len(self.navy.captains)/len(self.navy.dropoffs)) > 10
 
     @property
-    def should_drop(self):
+    def should_bank(self):
+        '''Returns True if ship should go bank its halite'''
         return self.ship.halite_amount > DROP_BARRIER
 
     @property
     def should_loot(self):
+        '''Returns True if ship should loot'''
         return self.current_location.good_for_looting(self.ship)
 
     @property
@@ -153,6 +168,7 @@ class Captain():
 
     @property
     def should_hunt(self):
+        '''Returns True if ship should go hunting'''
         return self.ship.halite_amount < DROP_BARRIER and self.can_afford_to_move
 
     @property
@@ -177,7 +193,7 @@ class Captain():
 
     @property
     def ship(self):
-        '''returns the Halite SDK ship that this captain is the captain of'''
+        '''Returns the Halite ship to which this is the captain'''
         try:
             return self.navy.admiral.player.get_ship(self.ship_id)
         except Exception:
@@ -191,7 +207,7 @@ class Captain():
             return 'FINAL'
         elif self.should_build:
             return 'BUILD'
-        elif self.should_drop:
+        elif self.should_bank:
             return 'BANK'
         elif self.should_loot:
             return 'LOOT'
@@ -224,19 +240,18 @@ class Captain():
         else:
             return self.stay_still()
 
-    # def move(self, target_location):
-    #     """ Handles moving the ship """
-    #     move = self.ship.move(self.ship.position, target_location.position)
-
     @property
     def closest_drop(self):
+        '''Returns the closest drop off'''
         try:
-            return min(self.navy.dropoffs, key=lambda x: self.game_map.calculate_distance(self.ship.position, x.position))
+            return min(self.navy.dropoffs,
+                       key=lambda x: self.game_map.calculate_distance(self.ship.position, x.position))
         except Exception:
             logger.exception('error in closest_drop')
 
     @property
     def best_target_location(self):
+        '''Returns the best target location based on get_fitness()'''
         try:
             locations = self.navy.admiral.map.safe_locations
             return max(locations, key=lambda x: x.get_fitness(ship=self.ship))
@@ -244,6 +259,11 @@ class Captain():
             logger.exception('error in best_target_location')
 
     def hunt(self):
+        '''Tells the ship where to go when hunting for halite
+
+        Returns:
+            ship.move -- Returns a ship command as expected by the command queue
+        '''
         logger.debug(f'{self.ship_id} is hunting')
         try:
             if self.current_location.cell.has_structure:
@@ -254,7 +274,9 @@ class Captain():
                 self.ship, best_location.position)
             target_position = self.ship.position.directional_offset(move)
 
-            if self.game_map[target_position].has_structure or self.distance_to_closest_drop <= 1 and move is Direction.Still:
+            if self.game_map[target_position].has_structure or \
+               self.distance_to_closest_drop <= 1 and \
+               move is Direction.Still:
                 return self.go_random_safe()
             elif target_position == self.last_location.position:
                 return self.ship.stay_still()
@@ -271,7 +293,12 @@ class Captain():
             return self.go_random_for_equal_distance(target_location=self.best_target_location)
 
     def bank(self):
-        logger.debug(str(self.ship_id) + ' is banking')
+        '''Tells the ship where to go when going to bank halite at a drop off
+
+        Returns:
+            ship.move -- Returns a ship command as expected by the command queue
+        '''
+        logger.debug(f'{self.ship_id} is banking')
         try:
             target = self.closest_drop.position
             move = self.game_map.naive_navigate(self.ship, target)
@@ -285,6 +312,13 @@ class Captain():
             return self.ship.move(move)
 
     def bank_unsafe(self):
+        '''Tells the ship where to go when going to bank halite at a drop off.
+           Will crash into other ships if moving onto a shipyard
+           to drop halite more quickly at the end of the game.
+
+        Returns:
+            ship.move -- Returns a ship command as expected by the command queue
+        '''
         logger.debug('%s going to bank unsafe', str(self.ship_id))
         try:
             target = self.closest_drop.position
@@ -306,16 +340,21 @@ class Captain():
                 self.ship, self.closest_drop.position))
 
     def build(self):
-        logger.info(f'{self.ship_id} is building.')
+        '''Tells the ship to navigate to the best location for a dropoff
+          and if it is on that location, it will attempt to build the dropoff
+
+        Returns:
+            ship.move -- Returns a ship command as expected by the command queue
+        '''
+        logger.debug(f'{self.ship_id} is building.')
         try:
             target = self.navy.admiral.map.best_location.position
             move = self.game_map.naive_navigate(self.ship, target)
             if self.current_location.position == self.navy.admiral.map.best_location.position:
-                logger.info(f'{self.ship_id} built.')
+                logger.debug(f'{self.ship_id} built.')
                 return self.ship.make_dropoff()
             else:
                 if self.can_afford_to_move:
-                    logger.info(f'{self.ship_id} going to build location.')
                     return self.ship.move(move)
                 else:
                     return self.ship.stay_still()
@@ -324,11 +363,21 @@ class Captain():
             return self.ship.stay_still()
 
     def loot(self):
-        logger.debug(str(self.ship_id) + ' looting')
+        '''Tells the ship to stay and loot the cell
+
+        Returns:
+            ship.move -- Returns a ship command as expected by the command queue
+        '''
+        logger.debug(f'{self.ship_id} looting')
         return self.ship.stay_still()
 
     def go_random_safe(self):
-        logger.debug(str(self.ship_id) + ' going random safe')
+        '''Tells the ship to go randomly and trys again once if it can't find a spot to move
+
+        Returns:
+            ship.move -- Returns a ship command as expected by the command queue
+        '''
+        logger.debug(f'{self.ship_id} going random safe')
         try:
             if self.can_afford_to_move:
                 target = self.current_location.get_random_neighbor_position_without_structure()
@@ -343,7 +392,12 @@ class Captain():
             return self.ship.stay_still()
 
     def go_random_unsafe(self):
-        logger.debug(str(self.ship_id) + ' going random unsafe')
+        '''Tells the ship to go randomly or else it stays still
+
+        Returns:
+            ship.move -- Returns a ship command as expected by the command queue
+        '''
+        logger.debug(f'{self.ship_id} going random unsafe')
         try:
             if self.can_afford_to_move:
                 target = self.current_location.get_random_neighbor_position_without_structure()
@@ -356,14 +410,21 @@ class Captain():
             return self.ship.stay_still()
 
     def go_random_for_equal_distance(self, target_location):
+        '''Tells the ship to go randomly for an equal amount of distance that it would 
+            be traveling for the target_location parameter or else stay still 
+
+        Returns:
+            ship.move -- Returns a ship command as expected by the command queue
+        '''
         try:
-            logger.debug(str(self.ship_id) + ' going random')
+            logger.debug(f'{self.ship_id} going random')
             target_distance = self.game_map.calculate_distance(
                 self.ship.position, target_location.position)
             neighbors = self.ship.position.get_surrounding_cardinals()
             nearby_cells = []
             for neighbor in neighbors:
-                if not self.game_map[neighbor].is_occupied and self.game_map[neighbor].position != self.last_location.position:
+                if not self.game_map[neighbor].is_occupied and \
+                        self.game_map[neighbor].position != self.last_location.position:
                     nearby_cells.append(self.game_map[neighbor])
             if not nearby_cells:
                 return self.ship.stay_still()
@@ -391,4 +452,9 @@ class Captain():
             return self.ship.stay_still()
 
     def stay_still(self):
+        '''Tells the ship to stay still
+
+        Returns:
+            ship.move -- Returns a ship command as expected by the command queue
+        '''
         return self.ship.stay_still()
